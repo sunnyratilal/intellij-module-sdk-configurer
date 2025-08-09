@@ -12,6 +12,7 @@ import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.VirtualFile
 import java.io.File
 import java.text.MessageFormat
 
@@ -30,19 +31,26 @@ class ConfigureModuleSdkAction : AnAction() {
             val moduleRootManager = ModuleRootManager.getInstance(module)
             val roots = moduleRootManager.contentRoots
             roots.forEach { root ->
-                val buildFeaturesDir = File(root.path, "build-features")
+                var javaVersion: String? = null
 
-                val javaApplicationFileMatch = buildFeaturesDir.listFiles()
-                    ?.firstOrNull { it.isFile && it.name.contains(Regex("java-\\d+-application")) }
-                if (javaApplicationFileMatch != null) {
-                    val javaVersion = Regex("java-(\\d+)-application")
-                        .find(javaApplicationFileMatch.name)
-                        ?.groupValues?.get(1)
-                        ?: error("Could not extract Java version from ${javaApplicationFileMatch.name} in ${root.name} (${root.path})")
+                // IntelliJ 2025.1 changes the Maven model structure whereby if a Maven module has differences tied
+                // to the compile or test-compile execution then the main and test modules are configured to be separate.
+                // https://youtrack.jetbrains.com/issue/IDEA-371535/Confusing-separate-.main-and-.test-modules-in-Maven-projects
+                if (module.name.endsWith(".main") || module.name.endsWith(".test")) {
+                    // Check for the build feature at the parent level
 
-                    logger.info("Found: ${javaApplicationFileMatch.name} in ${root.name} (${root.path}, Java version: $javaVersion")
+                    val parentModuleName = module.name.removeSuffix(".main").removeSuffix(".test")
+                    ModuleManager.getInstance(project).findModuleByName(parentModuleName)?.let { module ->
+                        ModuleRootManager.getInstance(module).contentRoots.forEach { root ->
+                            javaVersion = findModuleJavaVersion(root)
+                        }
+                    }
+                } else {
+                    javaVersion = findModuleJavaVersion(root)
+                }
 
-                    val sdk = findJavaSdk(javaVersion)
+                if (javaVersion != null) {
+                    val sdk = findJavaSdk(javaVersion!!)
                     if (sdk != null) {
                         if (sdk.name != moduleRootManager.sdk?.name) {
                             ModuleRootModificationUtil.setModuleSdk(module, sdk)
@@ -77,6 +85,22 @@ class ConfigureModuleSdkAction : AnAction() {
                 "Nothing to Re-Configure"
             )
         }
+    }
+
+    private fun findModuleJavaVersion(root: VirtualFile): String? {
+        val buildFeaturesDir = File(root.path, "build-features")
+        val javaApplicationFileMatch = buildFeaturesDir.listFiles()
+            ?.firstOrNull { it.isFile && it.name.contains(Regex("java-\\d+-application")) }
+        if (javaApplicationFileMatch != null) {
+            val javaVersion = Regex("java-(\\d+)-application")
+                .find(javaApplicationFileMatch.name)
+                ?.groupValues?.get(1)
+                ?: error("Could not extract Java version from ${javaApplicationFileMatch.name} in ${root.name} (${root.path})")
+
+            logger.info("Found: ${javaApplicationFileMatch.name} in ${root.name} (${root.path}, Java version: $javaVersion")
+            return javaVersion
+        }
+        return null
     }
 
     private fun findJavaSdk(javaVersion: String): Sdk? {
