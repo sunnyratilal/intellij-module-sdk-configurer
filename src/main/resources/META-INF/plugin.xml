@@ -1,0 +1,27 @@
+<idea-plugin>
+    <id>com.sunnyratilal.intellij-module-sdk-configurer</id>
+
+    <name>Module SDK Configurer</name>
+    <vendor>Sunny Ratilal</vendor>
+    <description><![CDATA[
+    Automatically configure Maven module SDKs based on the existence of a feature file.
+  ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Module SDK Configurer"
+                           displayType="BALLOON"
+                           key="com.sunnyratilal.intellij.modulesdkconfigurer"/>
+    </extensions>
+
+    <actions>
+        <action
+                id="com.sunnyratilal.intellij.modulesdkconfigurer.ConfigureModuleSdkAction"
+                class="com.sunnyratilal.intellij.modulesdkconfigurer.ConfigureModuleSdkAction"
+                text="Configure Module SDKs"
+                description="Maven modules have their SDK set to the project SDK. This will reconfigure the SDK based on the existence of a build feature file.">
+            <add-to-group group-id="ToolsMenu" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>
